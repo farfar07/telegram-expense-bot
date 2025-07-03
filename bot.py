@@ -54,28 +54,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[chat_id].append((now, label, amount))
         count += 1
 
-# /excel - tampil dengan markdown dan koma
+# Tambahkan di atas
+last_export_time = {}
+
+# /excel - tampil dengan markdown dan koma, hanya data terbaru
 async def export_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    entries = user_data.get(chat_id, [])
+    now = datetime.now()
+    last_time = last_export_time.get(chat_id, datetime.min)
 
-    if not entries:
-        await update.message.reply_text("📭 Belum ada data yang disimpan.")
+    entries = user_data.get(chat_id, [])
+    filtered = [(t, label, amount) for t, label, amount in entries if t > last_time]
+
+    if not filtered:
+        await update.message.reply_text("📭 Tidak ada data baru sejak /exl terakhir.")
         return
 
     rows = []
-    for t, label, amount in entries:
+    for t, label, amount in filtered:
         date_str = t.strftime("%d/%m")
-        label_clean = label.replace(",", "")  # hindari gangguan di CSV
+        label_clean = label.replace(",", "")
         rows.append(f"{date_str},{label_clean},{amount}")
 
     output = "\n".join(rows)
 
-    # Kirim sebagai code block Markdown (csv)
     await update.message.reply_text(
         f"```csv\n{output}\n```",
         parse_mode="Markdown"
     )
+
+    # Update waktu terakhir ekspor
+    last_export_time[chat_id] = now
 
 # /summary command
 async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
