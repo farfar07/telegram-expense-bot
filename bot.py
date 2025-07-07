@@ -142,8 +142,8 @@ async def main():
     app.add_handler(CommandHandler("sum", summary))
     app.add_handler(CommandHandler("exl", export_excel))
     app.add_handler(CommandHandler("reset", reset))
-    text_filter = (filters.UpdateType.EDITED_MESSAGE & filters.TEXT & ~filters.COMMAND) | (filters.PHOTO & filters.Caption())
-    app.add_handler(MessageHandler(text_filter, handle_message))
+    edited_filter = filters.UpdateType.EDITED_MESSAGE & filters.TEXT
+    app.add_handler(MessageHandler(edited_filter, handle_message))
     print("✅ Bot is running...")
     await app.run_polling()
 
