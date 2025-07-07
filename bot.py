@@ -6,31 +6,32 @@ import asyncio
 import re
 import os
 
-# Now maps: chat_id -> message_id -> (timestamp, label, amount)
-user_data = defaultdict(dict)
+user_data = {}
 last_summary_time = {}
-
 # Handle plain text messages
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    message = update.effective_message
-    message_text = message.text or message.caption
-    message_id = message.message_id
-
+    message_text = update.message.text or update.message.caption
     if not message_text:
         return
 
     lines = message_text.strip().split("\n")
     now = datetime.now()
-    updated = False
+
+    if chat_id not in user_data:
+        user_data[chat_id] = []
+
+    count = 0
+    failed = []
 
     for line in lines:
         line = line.strip()
         if not line:
-            continue
+            continue  # skip empty lines
 
         match = re.match(r"(.+?)\s+([\d.,kKrbRB]+)$", line)
         if not match:
+            failed.append(line)
             continue
 
         label = match.group(1).strip()
@@ -43,13 +44,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 amount = int(re.sub(r"[^\d]", "", raw_amount))
         except:
+            failed.append(line)
             continue
 
-        user_data[chat_id][message_id] = (now, label, amount)
-        updated = True
+        if not label:
+            failed.append(line)
+            continue
 
-    if updated:
-        print(f"✅ Saved message {message_id} from chat {chat_id}")
+        user_data[chat_id].append((now, label, amount))
+        count += 1
 
 # Tambahkan di atas
 last_export_time = {}
@@ -89,9 +92,8 @@ async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now()
     last_time = last_summary_time.get(chat_id, datetime.min)
 
-    entries = list(user_data.get(chat_id, {}).values())
-    filtered = [(label, amount) for t, label, amount in entries if t > last_time]
-
+    entries = user_data.get(chat_id, [])
+    filtered = [(label.strip(), amount) for t, label, amount in entries if t > last_time and label.strip()]
 
     if not filtered:
         await update.message.reply_text("Tidak ada pengeluaran baru sejak /sum terakhir.")
@@ -142,8 +144,8 @@ async def main():
     app.add_handler(CommandHandler("sum", summary))
     app.add_handler(CommandHandler("exl", export_excel))
     app.add_handler(CommandHandler("reset", reset))
-    edited_filter = filters.UpdateType.EDITED_MESSAGE & filters.TEXT
-    app.add_handler(MessageHandler(edited_filter, handle_message))
+    text_filter = (filters.TEXT & ~filters.COMMAND) | (filters.PHOTO & filters.Caption())
+    app.add_handler(MessageHandler(text_filter, handle_message))
     print("✅ Bot is running...")
     await app.run_polling()
 
